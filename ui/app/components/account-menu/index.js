@@ -5,8 +5,10 @@ const { compose } = require('recompose')
 const { withRouter } = require('react-router-dom')
 const PropTypes = require('prop-types')
 const h = require('react-hyperscript')
+const Fuse = require('fuse.js')
 const actions = require('../../actions')
 const { Menu, Item, Divider, CloseArea } = require('../dropdowns/components/menu')
+const AccountMenuSearch = require('./account-menu-search.component')
 const Identicon = require('../identicon')
 const { ENVIRONMENT_TYPE_POPUP } = require('../../../../app/scripts/lib/enums')
 const { getEnvironmentType } = require('../../../../app/scripts/lib/util')
@@ -33,7 +35,12 @@ AccountMenu.contextTypes = {
 }
 
 inherits(AccountMenu, Component)
-function AccountMenu () { Component.call(this) }
+function AccountMenu () { 
+  Component.call(this) 
+  this.state = {
+    searchValue: ""
+  }
+}
 
 function mapStateToProps (state) {
   return {
@@ -75,6 +82,10 @@ function mapDispatchToProps (dispatch) {
   }
 }
 
+AccountMenu.prototype.handleSearchChange = function (searchValue) {
+  this.setState({ searchValue })
+}
+
 AccountMenu.prototype.render = function () {
   const {
     isAccountMenuOpen,
@@ -97,6 +108,11 @@ AccountMenu.prototype.render = function () {
       }, this.context.t('logout')),
     ]),
     h(Divider),
+    h(AccountMenuSearch, {
+      handleSearchChange: (value) => {
+        this.handleSearchChange(value)
+      }
+    }),
     h('div.account-menu__accounts', this.renderAccounts()),
     h(Divider),
     h(Item, {
@@ -147,6 +163,25 @@ AccountMenu.prototype.render = function () {
   ])
 }
 
+AccountMenu.prototype.searchAccounts = function (accountOrder) {
+  const { searchValue } = this.state;
+
+  const options = { 
+    shouldSort: true, 
+    threshold: 0.7, 
+    location: 0, 
+    minMatchCharLength: 1, 
+    keys: [
+      "accountName"
+    ] 
+  };
+
+  const accounts = accountOrder.map(a => { accountName: a } );
+  const fuse = new Fuse(accounts, options);
+  const result = fuse.search(searchValue);
+  console.log("search results", result)
+}
+
 AccountMenu.prototype.renderAccounts = function () {
   const {
     identities,
@@ -155,9 +190,12 @@ AccountMenu.prototype.renderAccounts = function () {
     keyrings,
     showAccountDetail,
   } = this.props
+  console.log("rnderAccounts:", this)
 
   const accountOrder = keyrings.reduce((list, keyring) => list.concat(keyring.accounts), [])
-  return accountOrder.filter(address => !!identities[address]).map((address) => {
+  const accountsSearchFiltered = this.searchAccounts(accountOrder)
+  return accountsSearchFiltered.filter(address => !!identities[address]).map((address) => {
+  // return accountOrder.filter(address => !!identities[address]).map((address) => {
 
     const identity = identities[address]
     const isSelected = identity.address === selectedAddress
